@@ -1,0 +1,156 @@
+###############################################
+# MediaMTX Configuration
+# Raspberry Pi 5 - Home CCTV Server
+###############################################
+
+# General settings
+logLevel: info
+logDestinations: [stdout]
+
+# API server (for monitoring and management)
+api: yes
+apiAddress: 127.0.0.1:9997
+
+# Metrics
+metrics: yes
+metricsAddress: 127.0.0.1:9998
+
+# RTSP server configuration
+rtsp: yes
+protocols: [tcp, udp]
+rtspAddress: :8554
+
+# HLS server (for web browsers and mobile apps)
+hls: yes
+hlsAddress: :8888
+hlsAlwaysRemux: no
+hlsVariant: mpegts
+hlsSegmentCount: 7
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+
+# WebRTC server (for low-latency browser viewing)
+webrtc: yes
+webrtcAddress: :8889
+webrtcICEServers2: []
+
+# RTMP server (optional - for other streaming sources)
+rtmp: yes
+rtmpAddress: :1935
+
+# Recording (optional - set to yes to enable recording)
+# record: no
+
+###############################################
+# Path Configuration
+# Each camera gets its own path with authentication
+###############################################
+
+paths:
+  # Default settings for all paths
+  all:
+    # Global read access credentials
+    # These are used by viewers (VLC, browsers, etc.)
+    readUser: viewer
+    readPass: password
+
+    # Recording settings (applied to all paths if recording is enabled)
+    # recordPath: ./recordings/%path/%Y-%m-%d_%H-%M-%S
+    # recordFormat: mp4
+    # recordSegmentDuration: 1h
+
+  # Camera 1 - Example configuration
+  cam-zero1:
+    # Publish credentials - used by camera node to send stream
+    publishUser: zero1
+    publishPass: camera
+
+    # Override global read credentials if needed (optional)
+    # readUser: viewer1
+    # readPass: pass1
+
+  # Camera 2 - Example configuration
+  cam-zero2:
+    publishUser: zero2
+    publishPass: camera
+
+  # Camera 3 - Add more cameras as needed
+  cam-zero3:
+    publishUser: zero3
+    publishPass: camera
+
+  # Camera 4
+  cam-zero4:
+    publishUser: zero4
+    publishPass: camera
+
+  # Front Door Camera - Example with descriptive name
+  front-door:
+    publishUser: frontdoor
+    publishPass: camera
+
+  # Backyard Camera - Example with descriptive name
+  backyard:
+    publishUser: backyard
+    publishPass: camera
+
+  # Garage Camera
+  garage:
+    publishUser: garage
+    publishPass: camera
+
+  # Living Room Camera
+  living-room:
+    publishUser: livingroom
+    publishPass: camera
+
+###############################################
+# Usage Examples:
+###############################################
+#
+# Camera nodes publish to:
+#   rtsp://zero1:camera@<server-ip>:8554/cam-zero1
+#
+# Viewers access streams at:
+#   RTSP:   rtsp://viewer:password@<server-ip>:8554/cam-zero1
+#   WebRTC: http://<server-ip>:8889/cam-zero1
+#   HLS:    http://<server-ip>:8888/cam-zero1/index.m3u8
+#
+# To add a new camera:
+#   1. Add a new path section with unique name
+#   2. Set publishUser and publishPass
+#   3. Configure camera node with these credentials
+#   4. Restart MediaMTX: sudo systemctl restart mediamtx
+#
+# Or use the helper script:
+#   ./scripts/add-camera-path.sh
+#
+###############################################
+
+###############################################
+# Security Notes:
+###############################################
+#
+# 1. Change default passwords before deployment!
+# 2. Use strong, unique passwords for each camera
+# 3. Consider using VPN for remote access
+# 4. Keep passwords different for publish vs read access
+# 5. Regularly update MediaMTX for security patches
+#
+###############################################
+
+###############################################
+# Performance Tuning (Pi 5):
+###############################################
+#
+# The Raspberry Pi 5 can handle:
+#   - 4-6 simultaneous 720p@15fps streams
+#   - Multiple concurrent viewers per stream
+#   - WebRTC, HLS, and RTSP simultaneously
+#
+# For more cameras or higher resolution:
+#   - Use multiple Pi 5 servers
+#   - Reduce framerate on camera nodes
+#   - Use wired Ethernet for cameras if possible
+#
+###############################################

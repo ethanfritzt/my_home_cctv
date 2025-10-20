@@ -24,6 +24,7 @@ A production-ready **24/7 home security camera system** using Raspberry Pi Zero 
   - [Camera Node Setup](#camera-node-setup)
   - [Central Server Setup](#central-server-setup)
 - [Deployment](#deployment)
+  - [SD Card Cloning for Multiple Cameras](#sd-card-cloning-for-multiple-cameras)
 - [Hardware Installation](#hardware-installation)
 - [Monitoring and Maintenance](#monitoring-and-maintenance)
 - [Troubleshooting](#troubleshooting)
@@ -84,17 +85,48 @@ A production-ready **24/7 home security camera system** using Raspberry Pi Zero 
 
 ## Quick Start
 
+### Central Server (Raspberry Pi 5)
 ```bash
-# On Camera Node (Pi Zero W)
-sudo apt update && sudo apt install -y ffmpeg git
-# Follow camera node setup below
+# 1. Clone repository
+cd /home/pi && git clone <your-repo-url> my_home_cctv
+cd my_home_cctv && chmod +x scripts/*.sh
 
-# On Central Server (Pi 5)
-# Follow central server setup below
+# 2. Run automated setup (installs and configures MediaMTX)
+./scripts/setup-mediamtx-server.sh
 
-# Test stream
-# RTSP: rtsp://<pi5-ip>:8554/cam-zero1
-# WebRTC: http://<pi5-ip>:8889/cam-zero1
+# 3. Server is ready to receive camera streams!
+./scripts/check-mediamtx-status.sh
+```
+
+### First Camera Node (Raspberry Pi Zero W)
+```bash
+# 1. Install dependencies and setup (see full installation steps below)
+# 2. Clone repository
+cd /home/pi && git clone <your-repo-url> my_home_cctv
+cd my_home_cctv && chmod +x scripts/*.sh
+
+# 3. Initialize camera (prompts for server IP and stream name)
+sudo scripts/init-camera-node.sh
+
+# 4. Reboot and streaming starts automatically
+sudo reboot
+```
+
+### Additional Camera Nodes (via SD Card Cloning)
+```bash
+# 1. Clone SD card from working camera
+# 2. Boot new Pi and run:
+sudo /home/pi/my_home_cctv/scripts/init-camera-node.sh
+
+# 3. Reboot and verify stream
+sudo reboot
+```
+
+### Access Streams
+```bash
+# RTSP: rtsp://viewer:password@<pi5-ip>:8554/<stream-name>
+# WebRTC: http://<pi5-ip>:8889/<stream-name>
+# HLS:    http://<pi5-ip>:8888/<stream-name>
 ```
 
 ---
@@ -137,135 +169,129 @@ libcamera-hello
 
 You should see a preview window (or confirmation if running headless).
 
-#### 5. Create Streaming Script
-
-Create `/home/pi/camera-stream.sh`:
+#### 5. Clone Repository and Setup Scripts
 
 ```bash
-#!/bin/bash
-# camera-stream.sh - Stream Pi Zero camera to MediaMTX server
-
-# Configuration
-SERVER_IP="192.168.1.100"    # Replace with your Pi 5 IP
-STREAM_NAME="cam-zero1"      # Unique name for this camera
-USER="zero1"                 # Publisher username
-PASS="camera"                # Publisher password
-
-# Stream to MediaMTX using H.264 hardware encoding
-libcamera-vid -t 0 \
-    --codec h264 \
-    --inline \
-    --width 1280 --height 720 \
-    --framerate 15 \
-    -o - \
-| ffmpeg -re -i - -c copy -f rtsp "rtsp://$USER:$PASS@$SERVER_IP:8554/$STREAM_NAME"
+cd /home/pi
+git clone <your-repo-url> my_home_cctv
+cd my_home_cctv
+chmod +x scripts/*.sh
 ```
 
-Make executable:
+#### 6. Configure Camera Node
+
+Update `SERVER_IP` in `scripts/publish-stream.sh` to match your Pi 5 IP address:
 
 ```bash
-chmod +x /home/pi/camera-stream.sh
+nano scripts/publish-stream.sh
+# Change SERVER_IP="192.168.1.100" to your server IP
 ```
+
+#### 7. Install Systemd Service
+
+```bash
+sudo cp camera-stream.service.example /etc/systemd/system/camera-stream.service
+sudo systemctl daemon-reload
+sudo systemctl enable camera-stream.service
+```
+
+**Note:** Do NOT start the service yet. First run the initialization script to configure the camera node.
 
 ---
 
 ### Central Server Setup
 
-#### 1. Install Build Dependencies
+#### Quick Setup (Automated)
+
+For a streamlined setup, use the automated installation script:
 
 ```bash
-sudo apt update && sudo apt install -y git golang g++ xxd wget cmake meson pkg-config python3-jinja2 python3-yaml python3-ply
+# 1. Clone repository
+cd /home/pi
+git clone <your-repo-url> my_home_cctv
+cd my_home_cctv
+
+# 2. Make scripts executable
+chmod +x scripts/*.sh
+
+# 3. Run automated setup
+./scripts/setup-mediamtx-server.sh
 ```
 
-#### 2. Compile MediaMTX with Arducam Support
+The script will:
+- Install all build dependencies
+- Compile MediaMTX with Arducam/rpicamera support
+- Install the binary to `/usr/local/bin/`
+- Configure MediaMTX with example camera paths
+- Set up and optionally start the systemd service
+
+#### Manual Setup (Advanced)
+
+If you prefer manual installation or need customization:
+
+##### 1. Install Build Dependencies
 
 ```bash
-# Clone MediaMTX
-git clone https://github.com/bluenviron/mediamtx
-cd mediamtx
+sudo apt update && sudo apt install -y git golang g++ xxd wget cmake meson pkg-config python3-jinja2 python3-yaml python3-ply libcamera-dev ninja-build
+```
+
+##### 2. Compile MediaMTX with Arducam Support
+
+```bash
+# Create build directory
+mkdir -p ~/mediamtx-build && cd ~/mediamtx-build
 
 # Clone and compile rpicamera support
 git clone https://github.com/bluenviron/mediamtx-rpicamera
 cd mediamtx-rpicamera
-meson setup --wrap-mode=default build && DESTDIR=./prefix ninja -C build install
+meson setup --wrap-mode=default build
+DESTDIR=./prefix ninja -C build install
+
+# Clone MediaMTX
+cd ~/mediamtx-build
+git clone https://github.com/bluenviron/mediamtx
+cd mediamtx
 
 # Copy binary (use 64-bit for Pi 5)
-mkdir -p ../internal/staticsources/rpicamera/
-cp build/mtxrpicam_64 ../internal/staticsources/rpicamera/
+mkdir -p internal/staticsources/rpicamera/
+cp ../mediamtx-rpicamera/build/mtxrpicam_64 internal/staticsources/rpicamera/
 
 # Build MediaMTX
-cd ..
 go build -o mediamtx
 sudo mv mediamtx /usr/local/bin/
 ```
 
-#### 3. Configure MediaMTX
+##### 3. Configure MediaMTX
 
-Create `mediamtx.yml`:
-
-```yaml
-###############################################
-# MediaMTX Configuration
-###############################################
-
-# RTSP server
-rtspAddress: :8554
-
-# HLS server
-hlsAddress: :8888
-hls: yes
-
-# WebRTC server
-webrtcAddress: :8889
-webrtc: yes
-
-# Path configuration
-paths:
-  # Camera 1
-  cam-zero1:
-    publishUser: zero1
-    publishPass: camera
-
-  # Camera 2
-  cam-zero2:
-    publishUser: zero2
-    publishPass: camera
-
-  # Global read access
-  all:
-    readUser: viewer
-    readPass: password
-```
-
-#### 4. Create Systemd Service
-
-Create `/etc/systemd/system/mediamtx.service`:
-
-```ini
-[Unit]
-Description=MediaMTX RTSP Server
-After=network.target
-
-[Service]
-Type=simple
-User=pi
-WorkingDirectory=/home/pi
-ExecStart=/usr/local/bin/mediamtx /home/pi/mediamtx.yml
-Restart=always
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start:
+Copy the example configuration:
 
 ```bash
+cp mediamtx.yml.example ~/mediamtx.yml
+```
+
+Edit `~/mediamtx.yml` to add your camera paths. The example includes pre-configured paths for multiple cameras with authentication.
+
+##### 4. Set Up Systemd Service
+
+```bash
+sudo cp mediamtx.service.example /etc/systemd/system/mediamtx.service
 sudo systemctl daemon-reload
 sudo systemctl enable mediamtx.service
 sudo systemctl start mediamtx.service
+```
+
+#### Helper Scripts
+
+After installation, use these helper scripts for easier management:
+
+**Add a new camera:**
+```bash
+./scripts/add-camera-path.sh
+```
+
+**Check server status:**
+```bash
+./scripts/check-mediamtx-status.sh
 ```
 
 #### 5. Access Streams
@@ -280,35 +306,79 @@ sudo systemctl start mediamtx.service
 
 ## Deployment
 
-### Systemd Service for Camera Nodes
+### SD Card Cloning for Multiple Cameras
 
-Create `/etc/systemd/system/camera-stream.service` on each Pi Zero:
+Once you have one working camera node, you can clone the SD card to quickly deploy additional cameras.
 
-```ini
-[Unit]
-Description=Camera Stream to MediaMTX
-After=network-online.target
-Wants=network-online.target
+#### 1. Clone SD Card
 
-[Service]
-Type=simple
-User=pi
-ExecStart=/home/pi/camera-stream.sh
-Restart=always
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
+Use imaging software to clone your working SD card:
+- **Windows**: Win32 Disk Imager, Rufus
+- **macOS**: Apple Pi Baker, `dd` command
+- **Linux**: `dd`, Etcher
 
-[Install]
-WantedBy=multi-user.target
-```
+#### 2. Initialize Each Camera Node
 
-Enable and start:
+Boot the new Pi with the cloned SD card and run the initialization script:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable camera-stream.service
+sudo /home/pi/my_home_cctv/scripts/init-camera-node.sh
+```
+
+The script will prompt you to configure:
+- **Hostname**: Network identifier (e.g., `pi-front-door`, `pi-garage`)
+- **Stream name**: RTSP path (e.g., `front-door`, `backyard-cam`)
+
+Example session:
+```
+Enter hostname for this Pi: pi-front-door
+Enter stream name for this camera: front-door
+
+Configuration Summary:
+Hostname:    pi-front-door
+Stream name: front-door
+
+Apply this configuration? (y/n): y
+```
+
+#### 3. Reboot and Start Streaming
+
+After initialization, reboot and start the streaming service:
+
+```bash
+sudo reboot
+
+# After reboot
 sudo systemctl start camera-stream.service
+```
+
+#### 4. Verify Stream
+
+Access the stream at:
+```
+rtsp://viewer:password@<pi5-ip>:8554/<stream-name>
+```
+
+### Manual Service Management
+
+Check service status:
+
+```bash
+sudo systemctl status camera-stream.service
+```
+
+Stop/start/restart:
+
+```bash
+sudo systemctl stop camera-stream.service
+sudo systemctl start camera-stream.service
+sudo systemctl restart camera-stream.service
+```
+
+View live logs:
+
+```bash
+journalctl -u camera-stream.service -f
 ```
 
 ---

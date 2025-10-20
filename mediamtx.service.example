@@ -1,0 +1,68 @@
+# mediamtx.service.example
+# Systemd service file for MediaMTX RTSP/WebRTC/HLS server
+#
+# INSTALLATION:
+# This file is automatically configured by setup-mediamtx-server.sh
+# The script will:
+#   - Copy this file to /etc/systemd/system/mediamtx.service
+#   - Update User, WorkingDirectory, and config path
+#   - Enable and start the service
+#
+# MANUAL INSTALLATION (if needed):
+#   sudo cp mediamtx.service.example /etc/systemd/system/mediamtx.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable mediamtx.service
+#   sudo systemctl start mediamtx.service
+#
+# MANAGEMENT:
+#   sudo systemctl status mediamtx     # Check status
+#   sudo systemctl start mediamtx      # Start server
+#   sudo systemctl stop mediamtx       # Stop server
+#   sudo systemctl restart mediamtx    # Restart server
+#   journalctl -u mediamtx -f          # View live logs
+#   journalctl -u mediamtx -n 100      # View last 100 log lines
+
+[Unit]
+Description=MediaMTX RTSP/WebRTC/HLS Server
+Documentation=https://github.com/bluenviron/mediamtx
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# User and group (change if using different user)
+User=pi
+Group=pi
+
+# Working directory (where mediamtx.yml is located)
+WorkingDirectory=/home/pi
+
+# Start command with configuration file
+ExecStart=/usr/local/bin/mediamtx /home/pi/mediamtx.yml
+
+# Restart policy
+Restart=always
+RestartSec=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mediamtx
+
+# Security hardening (optional - uncomment for enhanced security)
+# NoNewPrivileges=true
+# PrivateTmp=true
+# ProtectSystem=strict
+# ProtectHome=read-only
+# ReadWritePaths=/home/pi/recordings
+
+# Resource limits (optional - uncomment to limit resource usage)
+# MemoryMax=1G
+# CPUQuota=100%
+
+# Nice level (lower priority, -20 to 19, default 0)
+# Nice=5
+
+[Install]
+WantedBy=multi-user.target

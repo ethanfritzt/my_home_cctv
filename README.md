@@ -50,14 +50,59 @@ This project sets up a **24/7 home security camera system** using Raspberry Pi Z
 
 ### Pi Zero W
 
-- Raspberry Pi OS Lite  
-- `libcamera` (pre-installed on modern OS)  
-- `ffmpeg`  
+- Raspberry Pi OS Lite
+- `libcamera` (custom compiled for Arducam compatibility)
+- `ffmpeg`
 - `systemd` (for auto-starting stream)
+
+#### Installing Dependencies
 
 ```bash
 sudo apt update && sudo apt install -y ffmpeg git
-````
+```
+
+#### Custom libcamera Compilation for Arducam OV5647
+
+Since we're using Arducam camera modules, we need to compile libcamera from source to ensure full compatibility.
+
+1. Install build dependencies:
+
+```bash
+sudo apt install -y \
+  g++ \
+  xxd \
+  wget \
+  git \
+  cmake \
+  meson \
+  pkg-config \
+  python3-jinja2 \
+  python3-yaml \
+  python3-ply
+```
+
+2. Install libcamera development package (or default libcamera):
+
+```bash
+sudo apt install -y libcamera-dev
+```
+
+3. Clone and compile mediamtx-rpicamera (provides Arducam-compatible libcamera):
+
+```bash
+git clone https://github.com/bluenviron/mediamtx-rpicamera
+cd mediamtx-rpicamera
+```
+
+4. Build with meson (disables embedded libraries):
+
+```bash
+meson setup --wrap-mode=default build && DESTDIR=./prefix ninja -C build install
+```
+
+This will produce `build/mtxrpicam_32` or `build/mtxrpicam_64` depending on your architecture.
+
+5. The compiled binaries include Arducam-specific patches. You can now use standard `libcamera-vid` commands as shown in the streaming script below.
 
 ### Pi 5
 
@@ -117,15 +162,59 @@ chmod +x /home/pi/camera-stream.sh
 
 ### Pi 5 Central MediaMTX Server
 
-1. Download precompiled MediaMTX:
+#### Compiling MediaMTX from Source
+
+Since we're using custom Arducam modules on the Pi Zero W nodes, we'll compile MediaMTX from source to ensure full compatibility.
+
+1. Download MediaMTX source code:
 
 ```bash
-wget https://github.com/bluenviron/mediamtx/releases/latest/download/mediamtx_linux_arm64.tar.gz
-tar -xzf mediamtx_linux_arm64.tar.gz
+git clone https://github.com/bluenviron/mediamtx
+cd mediamtx
+```
+
+2. Download and compile mediamtx-rpicamera:
+
+```bash
+git clone https://github.com/bluenviron/mediamtx-rpicamera
+cd mediamtx-rpicamera
+```
+
+3. Generate Go code:
+
+```bash
+go generate ./...
+```
+
+4. Copy the compiled rpicamera binary to MediaMTX:
+
+```bash
+# For 32-bit architecture
+cp build/mtxrpicam_32 ../mediamtx/internal/staticsources/rpicamera/
+
+# OR for 64-bit architecture (Pi 5 typically uses 64-bit)
+cp build/mtxrpicam_64 ../mediamtx/internal/staticsources/rpicamera/
+```
+
+Note: The destination folder should be `internal/staticsources/rpicamera/` inside the mediamtx directory.
+
+5. Compile MediaMTX:
+
+```bash
+cd ../mediamtx
+go run .
+```
+
+This will compile and run MediaMTX. For production use, build a binary:
+
+```bash
+go build -o mediamtx
 sudo mv mediamtx /usr/local/bin/
 ```
 
-2. Configure `mediamtx.yml`:
+#### MediaMTX Configuration
+
+Configure `mediamtx.yml`:
 
 ```yaml
 paths:
@@ -142,14 +231,23 @@ webrtc: yes
 hls: yes
 ```
 
-3. Start server:
+#### Running MediaMTX
+
+Start the MediaMTX server:
 
 ```bash
+# If you installed to /usr/local/bin/
 mediamtx mediamtx.yml
+
+# Or run directly from the compiled directory
+./mediamtx mediamtx.yml
 ```
+
+#### Accessing Streams
 
 * RTSP streams: `rtsp://<Pi5_IP>:8554/cam-zero1`
 * WebRTC browser access: `http://<Pi5_IP>:8889/cam-zero1`
+* HLS streams: `http://<Pi5_IP>:8888/cam-zero1`
 
 ---
 

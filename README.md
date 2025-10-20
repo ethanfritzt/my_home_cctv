@@ -1,6 +1,3 @@
-Absolutely! Here’s the **complete README.md** in fully formatted Markdown, ready to save as a file:
-
-````markdown
 # Raspberry Pi Zero W Arducam Home Security Camera System
 
 This project sets up a **24/7 home security camera system** using Raspberry Pi Zero W nodes with Arducam OV5647 modules, streaming to a **central Raspberry Pi 5 server** running **MediaMTX**. Each camera node streams via **H.264 hardware encoding** using `libcamera` + `ffmpeg`, while the Pi 5 aggregates and re-streams to multiple clients.

@@ -1,148 +1,157 @@
-# Raspberry Pi Zero W Arducam Home Security Camera System
+# Raspberry Pi Home Security Camera System
 
-This project sets up a **24/7 home security camera system** using Raspberry Pi Zero W nodes with Arducam OV5647 modules, streaming to a **central Raspberry Pi 5 server** running **MediaMTX**. Each camera node streams via **H.264 hardware encoding** using `libcamera` + `ffmpeg`, while the Pi 5 aggregates and re-streams to multiple clients.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+A production-ready **24/7 home security camera system** using Raspberry Pi Zero W nodes with Arducam OV5647 modules, streaming to a central Raspberry Pi 5 server running MediaMTX. Features H.264 hardware encoding, low latency streaming, and support for multiple concurrent viewers.
+
+## Features
+
+- **Low Latency Streaming**: Real-time H.264 hardware encoding via libcamera
+- **Scalable Architecture**: Support for multiple camera nodes streaming to a central server
+- **Multiple Protocols**: RTSP, WebRTC, and HLS streaming support
+- **Auto-Recovery**: Systemd services with automatic restart on failure
+- **Secure**: Password-protected streams with separate publish/read credentials
+- **Resource Efficient**: Optimized for 24/7 operation on low-power hardware
 
 ---
 
 ## Table of Contents
 
-- [Hardware Requirements](#hardware-requirements)  
-- [Software Requirements](#software-requirements)  
-- [Project Setup](#project-setup)  
-  - [Pi Zero W Camera Node](#pi-zero-w-camera-node)  
-  - [Pi 5 Central MediaMTX Server](#pi-5-central-mediamtx-server)  
-- [Deployment](#deployment)  
-  - [Systemd Service for 24/7 Streaming](#systemd-service-for-247-streaming)  
-  - [Starting & Monitoring](#starting--monitoring)  
-- [Hardware Installation](#hardware-installation)  
-  - [3D Printed Enclosure](#3d-printed-enclosure)  
-  - [Power and Network](#power-and-network)  
-- [Notes & Best Practices](#notes--best-practices)  
-- [References](#references)  
+- [Hardware Requirements](#hardware-requirements)
+- [Software Requirements](#software-requirements)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+  - [Camera Node Setup](#camera-node-setup)
+  - [Central Server Setup](#central-server-setup)
+- [Deployment](#deployment)
+- [Hardware Installation](#hardware-installation)
+- [Monitoring and Maintenance](#monitoring-and-maintenance)
+- [Troubleshooting](#troubleshooting)
+- [Best Practices](#best-practices)
+- [Contributing](#contributing)
+- [License](#license)
+- [References](#references)
 
 ---
 
 ## Hardware Requirements
 
-### Camera Node (Pi Zero W)
+### Camera Node (Per Camera)
 
-- Raspberry Pi Zero W or WH  
-- Arducam OV5647 camera module (CSI)  
-- MicroSD card (8–32GB, Raspbian Lite recommended)  
-- 5V 2A power supply  
-- Optional: Wi-Fi extender or strong 2.4 GHz Wi-Fi  
+| Component | Specification |
+|-----------|---------------|
+| Single Board Computer | Raspberry Pi Zero W or WH |
+| Camera Module | Arducam OV5647 (CSI interface) |
+| Storage | MicroSD card (8GB minimum, 16GB+ recommended) |
+| Power Supply | 5V 2A USB power adapter |
+| Network | 2.4 GHz Wi-Fi (strong signal required) |
 
-### Central Server (Pi 5)
+### Central Server
 
-- Raspberry Pi 5 (4GB recommended)  
-- MicroSD card or external SSD for storage  
-- 5V 3A power supply  
-- Wired or strong Wi-Fi connection  
+| Component | Specification |
+|-----------|---------------|
+| Single Board Computer | Raspberry Pi 5 (4GB RAM recommended) |
+| Storage | MicroSD card (16GB minimum) or SSD |
+| Power Supply | 5V 3A USB-C power adapter |
+| Network | Ethernet connection (recommended) or 5GHz Wi-Fi |
 
-### Optional
+### Optional Components
 
-- Ethernet switch for stable LAN  
-- 3D printed camera enclosure  
+- Ethernet switch for wired camera connections
+- 3D printed camera enclosures
+- PoE HATs for network-powered cameras
+- UPS for continuous operation during power outages
 
 ---
 
 ## Software Requirements
 
-### Pi Zero W
+### Camera Node
 
-- Raspberry Pi OS Lite
-- `libcamera` (custom compiled for Arducam compatibility)
-- `ffmpeg`
-- `systemd` (for auto-starting stream)
+- **Operating System**: Raspberry Pi OS Lite (latest)
+- **Core Dependencies**:
+  - `libcamera` (custom compiled for Arducam compatibility)
+  - `ffmpeg`
+  - `systemd`
 
-#### Installing Dependencies
+### Central Server
+
+- **Operating System**: Raspberry Pi OS or Ubuntu for Raspberry Pi
+- **Streaming Server**: MediaMTX (compiled from source with Arducam support)
+- **Optional**: Home Assistant, VLC, NVR software for recording
+
+---
+
+## Quick Start
 
 ```bash
+# On Camera Node (Pi Zero W)
 sudo apt update && sudo apt install -y ffmpeg git
+# Follow camera node setup below
+
+# On Central Server (Pi 5)
+# Follow central server setup below
+
+# Test stream
+# RTSP: rtsp://<pi5-ip>:8554/cam-zero1
+# WebRTC: http://<pi5-ip>:8889/cam-zero1
 ```
 
-#### Custom libcamera Compilation for Arducam OV5647
+---
 
-Since we're using Arducam camera modules, we need to compile libcamera from source to ensure full compatibility.
+## Installation
 
-1. Install build dependencies:
+### Camera Node Setup
+
+#### 1. Install Dependencies
 
 ```bash
-sudo apt install -y \
-  g++ \
-  xxd \
-  wget \
-  git \
-  cmake \
-  meson \
-  pkg-config \
-  python3-jinja2 \
-  python3-yaml \
-  python3-ply
+sudo apt update && sudo apt install -y ffmpeg git g++ xxd wget cmake meson pkg-config python3-jinja2 python3-yaml python3-ply libcamera-dev
 ```
 
-2. Install libcamera development package (or default libcamera):
+#### 2. Compile libcamera for Arducam
 
-```bash
-sudo apt install -y libcamera-dev
-```
-
-3. Clone and compile mediamtx-rpicamera (provides Arducam-compatible libcamera):
+Custom libcamera compilation ensures full compatibility with Arducam OV5647 modules.
 
 ```bash
 git clone https://github.com/bluenviron/mediamtx-rpicamera
 cd mediamtx-rpicamera
-```
-
-4. Build with meson (disables embedded libraries):
-
-```bash
 meson setup --wrap-mode=default build && DESTDIR=./prefix ninja -C build install
 ```
 
-This will produce `build/mtxrpicam_32` or `build/mtxrpicam_64` depending on your architecture.
+This produces `build/mtxrpicam_32` (32-bit) or `build/mtxrpicam_64` (64-bit).
 
-5. The compiled binaries include Arducam-specific patches. You can now use standard `libcamera-vid` commands as shown in the streaming script below.
-
-### Pi 5
-
-* Raspberry Pi OS / Ubuntu for Pi
-* MediaMTX precompiled or compiled from source
-* Optional: Home Assistant, VLC, NVR software
-
----
-
-## Project Setup
-
-### Pi Zero W Camera Node
-
-1. Enable the camera:
+#### 3. Enable Camera Interface
 
 ```bash
 sudo raspi-config
-# Interface Options → Camera → Enable
+# Navigate to: Interface Options → Camera → Enable
+sudo reboot
 ```
 
-2. Test camera:
+#### 4. Test Camera
 
 ```bash
 libcamera-hello
 ```
 
-3. Create a streaming script: `/home/pi/camera-stream.sh`
+You should see a preview window (or confirmation if running headless).
+
+#### 5. Create Streaming Script
+
+Create `/home/pi/camera-stream.sh`:
 
 ```bash
 #!/bin/bash
-# camera-stream.sh
-# Streams Pi Zero OV5647 to central MediaMTX server
+# camera-stream.sh - Stream Pi Zero camera to MediaMTX server
 
-# Replace these values
-SERVER_IP="192.168.1.100"   # Pi 5 IP
-STREAM_NAME="cam-zero1"
-USER="zero1"
-PASS="camera"
+# Configuration
+SERVER_IP="192.168.1.100"    # Replace with your Pi 5 IP
+STREAM_NAME="cam-zero1"      # Unique name for this camera
+USER="zero1"                 # Publisher username
+PASS="camera"                # Publisher password
 
-# Capture and push H.264 to MediaMTX
+# Stream to MediaMTX using H.264 hardware encoding
 libcamera-vid -t 0 \
     --codec h264 \
     --inline \
@@ -152,7 +161,7 @@ libcamera-vid -t 0 \
 | ffmpeg -re -i - -c copy -f rtsp "rtsp://$USER:$PASS@$SERVER_IP:8554/$STREAM_NAME"
 ```
 
-Make it executable:
+Make executable:
 
 ```bash
 chmod +x /home/pi/camera-stream.sh
@@ -160,113 +169,133 @@ chmod +x /home/pi/camera-stream.sh
 
 ---
 
-### Pi 5 Central MediaMTX Server
+### Central Server Setup
 
-#### Compiling MediaMTX from Source
-
-Since we're using custom Arducam modules on the Pi Zero W nodes, we'll compile MediaMTX from source to ensure full compatibility.
-
-1. Download MediaMTX source code:
+#### 1. Install Build Dependencies
 
 ```bash
+sudo apt update && sudo apt install -y git golang g++ xxd wget cmake meson pkg-config python3-jinja2 python3-yaml python3-ply
+```
+
+#### 2. Compile MediaMTX with Arducam Support
+
+```bash
+# Clone MediaMTX
 git clone https://github.com/bluenviron/mediamtx
 cd mediamtx
-```
 
-2. Download and compile mediamtx-rpicamera:
-
-```bash
+# Clone and compile rpicamera support
 git clone https://github.com/bluenviron/mediamtx-rpicamera
 cd mediamtx-rpicamera
-```
+meson setup --wrap-mode=default build && DESTDIR=./prefix ninja -C build install
 
-3. Generate Go code:
+# Copy binary (use 64-bit for Pi 5)
+mkdir -p ../internal/staticsources/rpicamera/
+cp build/mtxrpicam_64 ../internal/staticsources/rpicamera/
 
-```bash
-go generate ./...
-```
-
-4. Copy the compiled rpicamera binary to MediaMTX:
-
-```bash
-# For 32-bit architecture
-cp build/mtxrpicam_32 ../mediamtx/internal/staticsources/rpicamera/
-
-# OR for 64-bit architecture (Pi 5 typically uses 64-bit)
-cp build/mtxrpicam_64 ../mediamtx/internal/staticsources/rpicamera/
-```
-
-Note: The destination folder should be `internal/staticsources/rpicamera/` inside the mediamtx directory.
-
-5. Compile MediaMTX:
-
-```bash
-cd ../mediamtx
-go run .
-```
-
-This will compile and run MediaMTX. For production use, build a binary:
-
-```bash
+# Build MediaMTX
+cd ..
 go build -o mediamtx
 sudo mv mediamtx /usr/local/bin/
 ```
 
-#### MediaMTX Configuration
+#### 3. Configure MediaMTX
 
-Configure `mediamtx.yml`:
+Create `mediamtx.yml`:
 
 ```yaml
+###############################################
+# MediaMTX Configuration
+###############################################
+
+# RTSP server
+rtspAddress: :8554
+
+# HLS server
+hlsAddress: :8888
+hls: yes
+
+# WebRTC server
+webrtcAddress: :8889
+webrtc: yes
+
+# Path configuration
 paths:
+  # Camera 1
   cam-zero1:
     publishUser: zero1
     publishPass: camera
+
+  # Camera 2
   cam-zero2:
     publishUser: zero2
     publishPass: camera
+
+  # Global read access
   all:
     readUser: viewer
     readPass: password
-webrtc: yes
-hls: yes
 ```
 
-#### Running MediaMTX
+#### 4. Create Systemd Service
 
-Start the MediaMTX server:
+Create `/etc/systemd/system/mediamtx.service`:
+
+```ini
+[Unit]
+Description=MediaMTX RTSP Server
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi
+ExecStart=/usr/local/bin/mediamtx /home/pi/mediamtx.yml
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
 
 ```bash
-# If you installed to /usr/local/bin/
-mediamtx mediamtx.yml
-
-# Or run directly from the compiled directory
-./mediamtx mediamtx.yml
+sudo systemctl daemon-reload
+sudo systemctl enable mediamtx.service
+sudo systemctl start mediamtx.service
 ```
 
-#### Accessing Streams
+#### 5. Access Streams
 
-* RTSP streams: `rtsp://<Pi5_IP>:8554/cam-zero1`
-* WebRTC browser access: `http://<Pi5_IP>:8889/cam-zero1`
-* HLS streams: `http://<Pi5_IP>:8888/cam-zero1`
+| Protocol | URL Format | Use Case |
+|----------|-----------|----------|
+| **RTSP** | `rtsp://viewer:password@<pi5-ip>:8554/cam-zero1` | VLC, NVR software |
+| **WebRTC** | `http://<pi5-ip>:8889/cam-zero1` | Low-latency browser viewing |
+| **HLS** | `http://<pi5-ip>:8888/cam-zero1` | Mobile apps, broad compatibility |
 
 ---
 
 ## Deployment
 
-### Systemd Service for 24/7 Streaming
+### Systemd Service for Camera Nodes
 
 Create `/etc/systemd/system/camera-stream.service` on each Pi Zero:
 
 ```ini
 [Unit]
-Description=Pi Zero Camera Stream
-After=network.target
+Description=Camera Stream to MediaMTX
+After=network-online.target
+Wants=network-online.target
 
 [Service]
+Type=simple
+User=pi
 ExecStart=/home/pi/camera-stream.sh
 Restart=always
-RestartSec=5
-User=pi
+RestartSec=10
 StandardOutput=journal
 StandardError=journal
 
@@ -282,67 +311,181 @@ sudo systemctl enable camera-stream.service
 sudo systemctl start camera-stream.service
 ```
 
-### Starting & Monitoring
-
-* Check status:
-
-```bash
-sudo systemctl status camera-stream.service
-```
-
-* Follow logs:
-
-```bash
-journalctl -u camera-stream.service -f
-```
-
 ---
 
 ## Hardware Installation
 
 ### 3D Printed Enclosure
 
-* Use a lightweight 3D printed case for Pi Zero + Arducam.
-* Ensure proper **ventilation** for the Pi Zero.
-* Mount camera module lens with unobstructed view.
-* Include cable management for power and optional Wi-Fi antenna.
+- Use a ventilated enclosure designed for Pi Zero W
+- Ensure camera lens has an unobstructed view
+- Include cable management for power and optional antenna extension
+- Mount securely to prevent vibration affecting image quality
 
 ### Power and Network
 
-* Use a **stable 5V 2A power supply** for Pi Zero.
-* Prefer **static IP** or DHCP reservation for each Pi Zero.
-* Position near strong Wi-Fi; avoid long cables or interference.
+- **Static IP Assignment**: Configure DHCP reservations for each Pi Zero node
+- **Power Supply**: Use quality 5V 2A adapters; avoid underpowered USB ports
+- **Wi-Fi Optimization**:
+  - Position cameras within strong signal range
+  - Use 2.4 GHz (better range) for camera nodes
+  - Consider Wi-Fi extenders for distant locations
 
 ---
 
-## Notes & Best Practices
+## Monitoring and Maintenance
 
-* Use **720p @ 15fps** for Pi Zero W nodes for reliable 24/7 streaming.
-* Use **H.264 hardware encoding only** to minimize CPU load.
-* Logs are critical for monitoring; systemd auto-restart ensures resilience.
-* Pi 5 aggregates multiple streams, handles multiple viewers, and can optionally record.
-* Add more Pi Zero cameras by copying the script/service and changing `STREAM_NAME` and authentication.
+### Check Service Status
+
+**Camera Node:**
+```bash
+sudo systemctl status camera-stream.service
+```
+
+**Central Server:**
+```bash
+sudo systemctl status mediamtx.service
+```
+
+### View Live Logs
+
+**Camera Node:**
+```bash
+journalctl -u camera-stream.service -f
+```
+
+**Central Server:**
+```bash
+journalctl -u mediamtx.service -f
+```
+
+### Performance Monitoring
+
+```bash
+# CPU and memory usage
+htop
+
+# Network bandwidth
+iftop
+
+# Temperature monitoring
+vcgencmd measure_temp
+```
+
+---
+
+## Troubleshooting
+
+### Camera Not Detected
+
+```bash
+# Verify camera is connected
+libcamera-hello
+
+# Check CSI cable connection
+# Ensure camera is enabled in raspi-config
+```
+
+### Stream Connection Failed
+
+```bash
+# Verify MediaMTX is running
+systemctl status mediamtx.service
+
+# Check network connectivity
+ping <server-ip>
+
+# Verify credentials in camera-stream.sh match mediamtx.yml
+```
+
+### High CPU Usage
+
+- Reduce resolution or framerate in camera-stream.sh
+- Ensure H.264 hardware encoding is enabled
+- Check for multiple streaming processes
+
+### Network Lag
+
+- Use wired Ethernet instead of Wi-Fi where possible
+- Reduce framerate to 10-12 fps
+- Ensure proper bandwidth allocation
+
+---
+
+## Best Practices
+
+### Performance Optimization
+
+- **Resolution**: Use 720p (1280x720) for Pi Zero W nodes
+- **Framerate**: 15 fps provides smooth video with low CPU load
+- **Encoding**: Always use H.264 hardware encoding
+- **Bitrate**: Let libcamera auto-adjust based on scene complexity
+
+### Security Recommendations
+
+- Change default passwords in `mediamtx.yml`
+- Use separate credentials for publish and read access
+- Consider VPN access for remote viewing
+- Keep systems updated with security patches
+
+### Reliability
+
+- Enable automatic restarts via systemd
+- Monitor system logs regularly
+- Use quality SD cards (Class 10, A1 rated)
+- Implement UPS for critical installations
+
+### Scaling
+
+- Add cameras by duplicating the stream script with new names
+- Pi 5 can handle 4-6 simultaneous 720p streams
+- Consider multiple Pi 5 servers for larger installations
+- Use network switches to segment camera traffic
+
+---
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues, fork the repository, and create pull requests for any improvements.
+
+### Development Setup
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+---
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
 ## References
 
-* [MediaMTX GitHub](https://github.com/bluenviron/mediamtx)
-* [Arducam OV5647](https://www.arducam.com)
-* [libcamera Documentation](https://www.raspberrypi.com/documentation/computers/camera_software.html)
-* [Raspberry Pi Forums](https://www.raspberrypi.org/forums/)
+### Official Documentation
+
+- [MediaMTX GitHub Repository](https://github.com/bluenviron/mediamtx)
+- [Arducam Documentation](https://www.arducam.com)
+- [Raspberry Pi Camera Documentation](https://www.raspberrypi.com/documentation/computers/camera_software.html)
+- [libcamera Project](https://libcamera.org/)
+
+### Community Resources
+
+- [Raspberry Pi Forums](https://www.raspberrypi.org/forums/)
+- [MediaMTX Discussions](https://github.com/bluenviron/mediamtx/discussions)
+
+### Related Projects
+
+- [MotionEye](https://github.com/ccrisan/motioneye) - Alternative camera surveillance system
+- [Shinobi](https://shinobi.video/) - Open-source CCTV solution
+- [ZoneMinder](https://zoneminder.com/) - Full-featured video surveillance system
 
 ---
 
-**Congratulations!** You now have a **fully automated, always-on home security camera system** using Raspberry Pi Zero W nodes and a Pi 5 central server.
+**Built with** Raspberry Pi, Arducam, MediaMTX, and libcamera
 
-```
-
----
-
-This is **complete Markdown**, fully structured with headings, code blocks, and instructions for hardware, software, deployment, and enclosures.  
-
-I can also create a **ready-to-deploy folder structure** with scripts for multiple Pi Zero cameras if you want — it would be plug-and-play.  
-
-Do you want me to do that next?
-```
+Made with dedication for home security enthusiasts

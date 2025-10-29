@@ -1,11 +1,11 @@
 # camera-stream.service.example
-# Example systemd service file for camera streaming
+# Systemd service for Pi Zero camera streaming using rpicam-vid
 #
 # IMPORTANT: This file is automatically configured by init-camera-node.sh
 # The script will:
 #   - Copy this file to /etc/systemd/system/camera-stream.service
-#   - Add SERVER_IP and STREAM_NAME environment variables
-#   - Update the ExecStart path to match your installation
+#   - Set SERVER_IP and STREAM_NAME environment variables
+#   - Enable and start the service
 #
 # Do NOT manually copy this file. Instead, run:
 #    sudo /home/pi/my_home_cctv/scripts/init-camera-node.sh
@@ -17,9 +17,15 @@
 #    sudo systemctl restart camera-stream   # Restart streaming
 #    sudo systemctl enable camera-stream    # Enable auto-start on boot
 #    journalctl -u camera-stream -f         # View live logs
+#
+# PERFORMANCE NOTES:
+#    - Uses rpicam-vid with H.264 hardware encoding
+#    - Optimized for 720p@25fps with minimal CPU usage
+#    - TCP streaming for Wi-Fi reliability
+#    - No FFmpeg required on Pi Zero
 
 [Unit]
-Description=Camera Stream to MediaMTX
+Description=Pi Zero Camera Stream (rpicam-vid → MediaMTX)
 After=network-online.target
 Wants=network-online.target
 
@@ -27,7 +33,14 @@ Wants=network-online.target
 Type=simple
 User=pi
 WorkingDirectory=/home/pi
-ExecStart=/home/pi/scripts/publish-stream.sh
+ExecStart=/usr/bin/rpicam-vid -t 0 \
+  --inline \
+  --codec h264 \
+  --width 1280 --height 720 \
+  --framerate 25 \
+  --level 4.2 \
+  --low-latency \
+  --output tcp://${SERVER_IP}:8554/${STREAM_NAME}
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -35,8 +48,8 @@ StandardError=journal
 
 # Environment variables
 # These are automatically set by init-camera-node.sh:
-# - SERVER_IP: IP address of the MediaMTX server
-# - STREAM_NAME: Unique name for this camera's stream
+# - SERVER_IP: IP address of the MediaMTX server (e.g., 192.168.1.100)
+# - STREAM_NAME: Unique name for this camera's stream (e.g., front-door)
 Environment="HOME=/home/pi"
 
 [Install]

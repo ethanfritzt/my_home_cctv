@@ -1,6 +1,7 @@
 ###############################################
 # MediaMTX Configuration
 # Raspberry Pi 5 - Home CCTV Server
+# Optimized for Pi Zero → Pi 5 streaming
 ###############################################
 
 # General settings
@@ -16,6 +17,7 @@ metrics: yes
 metricsAddress: 127.0.0.1:9998
 
 # RTSP server configuration
+# Receives TCP/UDP streams from Pi Zero cameras
 rtsp: yes
 protocols: [tcp, udp]
 rtspAddress: :8554
@@ -28,99 +30,92 @@ hlsVariant: mpegts
 hlsSegmentCount: 7
 hlsSegmentDuration: 1s
 hlsPartDuration: 200ms
+hlsSegmentMaxSize: 50M
 
 # WebRTC server (for low-latency browser viewing)
 webrtc: yes
 webrtcAddress: :8889
 webrtcICEServers2: []
 
-# RTMP server (optional - for other streaming sources)
-rtmp: yes
-rtmpAddress: :1935
+# RTMP server (disabled - not needed for rpicam-vid)
+rtmp: no
 
-# Recording (optional - set to yes to enable recording)
-# record: no
+# Recording (optional - enable for NVR functionality)
+# record: yes
+# recordPath: ./recordings/%path/%Y-%m-%d_%H-%M-%S-%f
+# recordFormat: mp4
+# recordPartDuration: 1s
+# recordSegmentDuration: 1h
+# recordDeleteAfter: 168h  # 7 days
 
 ###############################################
 # Path Configuration
-# Each camera gets its own path with authentication
+# Each camera gets its own path
+# Note: rpicam-vid streams directly without authentication
 ###############################################
 
 paths:
   # Default settings for all paths
   all:
-    # Global read access credentials
-    # These are used by viewers (VLC, browsers, etc.)
-    readUser: viewer
-    readPass: password
+    # Global read access (optional - comment out for no auth)
+    # readUser: viewer
+    # readPass: password
 
-    # Recording settings (applied to all paths if recording is enabled)
-    # recordPath: ./recordings/%path/%Y-%m-%d_%H-%M-%S
-    # recordFormat: mp4
-    # recordSegmentDuration: 1h
+    # Source type - rpicam-vid uses direct TCP/UDP input
+    # No special configuration needed for receiving streams
 
-  # Camera 1 - Example configuration
-  cam-zero1:
-    # Publish credentials - used by camera node to send stream
-    publishUser: zero1
-    publishPass: camera
+  # Example camera configurations
+  # Add a path for each Pi Zero camera
 
-    # Override global read credentials if needed (optional)
-    # readUser: viewer1
-    # readPass: pass1
+  camera:
+    # Basic camera path - no authentication required
+    # Pi Zero streams to: tcp://pi5.local:8554/camera
+    # View at: rtsp://pi5.local:8554/camera
 
-  # Camera 2 - Example configuration
-  cam-zero2:
-    publishUser: zero2
-    publishPass: camera
-
-  # Camera 3 - Add more cameras as needed
-  cam-zero3:
-    publishUser: zero3
-    publishPass: camera
-
-  # Camera 4
-  cam-zero4:
-    publishUser: zero4
-    publishPass: camera
-
-  # Front Door Camera - Example with descriptive name
   front-door:
-    publishUser: frontdoor
-    publishPass: camera
+    # Front door camera
+    # Stream from Pi: rpicam-vid --output tcp://pi5.local:8554/front-door
 
-  # Backyard Camera - Example with descriptive name
   backyard:
-    publishUser: backyard
-    publishPass: camera
+    # Backyard camera
 
-  # Garage Camera
   garage:
-    publishUser: garage
-    publishPass: camera
+    # Garage camera
 
-  # Living Room Camera
   living-room:
-    publishUser: livingroom
-    publishPass: camera
+    # Living room camera
+
+  cam1:
+    # Generic camera 1
+
+  cam2:
+    # Generic camera 2
+
+  cam3:
+    # Generic camera 3
 
 ###############################################
 # Usage Examples:
 ###############################################
 #
-# Camera nodes publish to:
-#   rtsp://zero1:camera@<server-ip>:8554/cam-zero1
+# Stream from Pi Zero camera:
+#   rpicam-vid -t 0 --inline --codec h264 \
+#     --width 1280 --height 720 --framerate 25 \
+#     --level 4.2 --low-latency \
+#     --output tcp://pi5.local:8554/camera
 #
-# Viewers access streams at:
-#   RTSP:   rtsp://viewer:password@<server-ip>:8554/cam-zero1
-#   WebRTC: http://<server-ip>:8889/cam-zero1
-#   HLS:    http://<server-ip>:8888/cam-zero1/index.m3u8
+# View streams at:
+#   RTSP:   rtsp://pi5.local:8554/camera
+#   WebRTC: http://pi5.local:8889/camera
+#   HLS:    http://pi5.local:8888/camera/index.m3u8
+#
+# With authentication (if enabled):
+#   RTSP:   rtsp://viewer:password@pi5.local:8554/camera
 #
 # To add a new camera:
-#   1. Add a new path section with unique name
-#   2. Set publishUser and publishPass
-#   3. Configure camera node with these credentials
-#   4. Restart MediaMTX: sudo systemctl restart mediamtx
+#   1. Add a new path section with unique name (e.g., "front-door")
+#   2. Configure Pi Zero to stream to that path
+#   3. Restart MediaMTX: sudo systemctl restart mediamtx
 #
 # Or use the helper script:
 #   ./scripts/add-camera-path.sh
@@ -131,11 +126,11 @@ paths:
 # Security Notes:
 ###############################################
 #
-# 1. Change default passwords before deployment!
-# 2. Use strong, unique passwords for each camera
-# 3. Consider using VPN for remote access
-# 4. Keep passwords different for publish vs read access
-# 5. Regularly update MediaMTX for security patches
+# 1. Enable authentication (readUser/readPass) for viewer access
+# 2. Use firewall rules to restrict access to port 8554
+# 3. Consider VPN for remote access
+# 4. Keep MediaMTX updated for security patches
+# 5. Use HTTPS for WebRTC when accessing remotely
 #
 ###############################################
 
@@ -144,13 +139,19 @@ paths:
 ###############################################
 #
 # The Raspberry Pi 5 can handle:
-#   - 4-6 simultaneous 720p@15fps streams
+#   - 4-6 simultaneous 720p@25fps H.264 streams
 #   - Multiple concurrent viewers per stream
 #   - WebRTC, HLS, and RTSP simultaneously
 #
-# For more cameras or higher resolution:
-#   - Use multiple Pi 5 servers
-#   - Reduce framerate on camera nodes
-#   - Use wired Ethernet for cameras if possible
+# Optimizations:
+#   - Use wired Ethernet on Pi 5 for best performance
+#   - Keep Pi Zero cameras on 2.4GHz Wi-Fi for range
+#   - TCP streaming recommended for Wi-Fi reliability
+#   - UDP streaming for local LAN with minimal latency
+#
+# For larger deployments:
+#   - Use multiple Pi 5 servers (4-6 cameras each)
+#   - Segment networks with VLANs
+#   - Consider dedicated NVR software for recording
 #
 ###############################################

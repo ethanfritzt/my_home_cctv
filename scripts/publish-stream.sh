@@ -1,57 +1,43 @@
 #!/bin/bash
-# publish-stream.sh - Stream Pi Zero camera to MediaMTX using rpicam-vid
-# Optimized for low latency and minimal CPU usage
-#
-# NOTE: This script is now LEGACY - the systemd service calls rpicam-vid directly
-# It's kept for backwards compatibility and manual testing
-#
-# For production use, the camera-stream.service calls rpicam-vid directly
-# without this wrapper script
+# publish-stream.sh - Stream Pi camera to MediaMTX server
+# This script captures video using libcamera and streams it via RTSP
 
-# Configuration - These values are set via environment variables
+# Configuration - These values are set via environment variables by the systemd service
 # SERVER_IP and STREAM_NAME should be set in the systemd service file
-# or exported in your shell for manual testing
+# They are configured during setup by init-camera-node.sh
 
 # Get current username
 CURRENT_USER=$(whoami)
 
-# Video settings (optimized for Pi Zero W)
+# Video settings
 WIDTH=1280
 HEIGHT=720
-FRAMERATE=25
-LEVEL="4.2"
+FRAMERATE=15
 
 # Log startup
-echo "Starting camera stream with rpicam-vid..."
+echo "Starting camera stream..."
 echo "User: $CURRENT_USER"
 echo "Server: $SERVER_IP"
 echo "Stream: $STREAM_NAME"
 echo "Resolution: ${WIDTH}x${HEIGHT} @ ${FRAMERATE}fps"
-echo "Profile: H.264 Level $LEVEL"
 
 # Validate required environment variables
 if [ -z "$SERVER_IP" ]; then
     echo "Error: SERVER_IP environment variable is not set"
-    echo "Usage: SERVER_IP=192.168.1.100 STREAM_NAME=camera ./publish-stream.sh"
     exit 1
 fi
 
 if [ -z "$STREAM_NAME" ]; then
     echo "Error: STREAM_NAME environment variable is not set"
-    echo "Usage: SERVER_IP=192.168.1.100 STREAM_NAME=camera ./publish-stream.sh"
     exit 1
 fi
 
-# Stream directly to MediaMTX using rpicam-vid
-# No FFmpeg required - saves CPU and reduces latency
-echo "Streaming to: tcp://$SERVER_IP:8554/$STREAM_NAME"
-
-rpicam-vid -t 0 \
-    --inline \
+# Stream to MediaMTX using H.264 hardware encoding (no authentication)
+libcamera-vid -t 0 \
     --codec h264 \
+    --inline \
     --width $WIDTH \
     --height $HEIGHT \
     --framerate $FRAMERATE \
-    --level $LEVEL \
-    --low-latency \
-    --output "tcp://$SERVER_IP:8554/$STREAM_NAME"
+    -o - \
+| ffmpeg -re -i - -c copy -f rtsp "rtsp://$SERVER_IP:8554/$STREAM_NAME"

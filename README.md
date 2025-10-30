@@ -85,186 +85,49 @@ A production-ready **24/7 home security camera system** using Raspberry Pi Zero 
 
 ## Quick Start
 
-This quickstart guide is based on real-world testing with Pi Zero W cameras streaming directly to a Pi 5 MediaMTX server using `rpicam-vid` for optimal performance and minimal latency.
-
-### 1️⃣ Pi 5 Setup (MediaMTX Server)
-
-#### Install MediaMTX
-
+### Central Server (Raspberry Pi 5)
 ```bash
-# Download latest release
-wget https://github.com/bluenviron/mediamtx/releases/download/v1.0.0/mediamtx_v1.0.0_linux_arm64v8.tar.gz
-tar xzf mediamtx_v1.0.0_linux_arm64v8.tar.gz
-sudo mv mediamtx /usr/local/bin/
+# 1. Clone repository
+cd /home/pi && git clone <your-repo-url> my_home_cctv
+cd my_home_cctv && chmod +x scripts/*.sh
 
-# Or use package manager (if available)
-sudo apt update && sudo apt install -y mediamtx
+# 2. Run automated setup (installs and configures MediaMTX)
+./scripts/setup-mediamtx-server.sh
+
+# 3. Server is ready to receive camera streams!
+./scripts/check-mediamtx-status.sh
 ```
 
-#### Configure MediaMTX
-
+### First Camera Node (Raspberry Pi Zero W)
 ```bash
-# Copy example config
-cd /home/pi
-git clone <your-repo-url> my_home_cctv
-cd my_home_cctv
-cp mediamtx.yml.example ~/mediamtx.yml
+# 1. Install dependencies and setup (see full installation steps below)
+# 2. Clone repository
+cd /home/pi && git clone <your-repo-url> my_home_cctv
+cd my_home_cctv && chmod +x scripts/*.sh
 
-# Edit config if needed (default works for most setups)
-nano ~/mediamtx.yml
-```
+# 3. Initialize camera (prompts for server IP and stream name)
+sudo scripts/init-camera-node.sh
 
-#### Start MediaMTX Service
-
-```bash
-# Copy systemd service
-sudo cp mediamtx.service.example /etc/systemd/system/mediamtx.service
-
-# Start and enable
-sudo systemctl daemon-reload
-sudo systemctl enable --now mediamtx
-
-# Check status
-sudo systemctl status mediamtx
-```
-
-### 2️⃣ Pi Zero Camera Setup
-
-#### Enable Camera
-
-```bash
-sudo raspi-config
-# Navigate to: Interface Options → Camera → Enable
+# 4. Reboot and streaming starts automatically
 sudo reboot
 ```
 
-#### Test Camera
-
+### Additional Camera Nodes (via SD Card Cloning)
 ```bash
-libcamera-hello
-# You should see a preview or confirmation message
-```
-
-#### Install Required Packages
-
-```bash
-sudo apt update
-sudo apt install -y git
-```
-
-### 3️⃣ Configure Streaming
-
-#### Clone Repository
-
-```bash
-cd /home/pi
-git clone <your-repo-url> my_home_cctv
-cd my_home_cctv
-chmod +x scripts/*.sh
-```
-
-#### Initialize Camera Node
-
-```bash
-# This script will prompt for server IP and stream name
-sudo ./scripts/init-camera-node.sh
-
-# Example:
-# Enter hostname for this Pi: pi-front-door
-# Enter stream name for this camera: front-door
-# Enter MediaMTX server IP: 192.168.1.100
-```
-
-The script will:
-- Set the hostname
-- Configure the stream name
-- Set the server IP
-- Create and enable the systemd service
-
-#### Start Streaming
-
-```bash
-# Reboot to apply changes
-sudo reboot
-
-# After reboot, verify streaming
-sudo systemctl status camera-stream
-journalctl -u camera-stream -f
-```
-
-### 4️⃣ Optimized rpicam-vid Streaming
-
-The system uses this optimized command for low-latency, reliable streaming:
-
-**TCP (recommended for Wi-Fi):**
-```bash
-rpicam-vid -t 0 \
-  --inline \
-  --codec h264 \
-  --width 1280 --height 720 \
-  --framerate 25 \
-  --level 4.2 \
-  --low-latency \
-  --output tcp://pi5.local:8554/camera
-```
-
-**UDP (LAN only, lower latency):**
-```bash
-rpicam-vid -t 0 \
-  --inline \
-  --codec h264 \
-  --width 1280 --height 720 \
-  --framerate 25 \
-  --level 4.2 \
-  --low-latency \
-  --output udp://pi5.local:8554
-```
-
-**Key flags:**
-- `--inline` → Include headers in stream for RTSP compatibility
-- `--low-latency` → Reduce buffering for real-time streaming
-- `--level 4.2` → Ensure decoder compatibility
-- TCP = stable, reliable; UDP = lower latency but may drop frames
-
-### 5️⃣ Viewing Streams
-
-Use any RTSP client to view streams:
-
-```bash
-# RTSP (VLC, ffplay, etc.)
-rtsp://pi5.local:8554/camera
-
-# Or with authentication (if configured)
-rtsp://viewer:password@pi5.local:8554/camera
-
-# WebRTC (browser)
-http://pi5.local:8889/camera
-
-# HLS (mobile apps)
-http://pi5.local:8888/camera/index.m3u8
-```
-
-### 6️⃣ Multiple Cameras
-
-For additional cameras, clone your working SD card and run the init script again:
-
-```bash
-# On each new Pi Zero
+# 1. Clone SD card from working camera
+# 2. Boot new Pi and run:
 sudo /home/pi/my_home_cctv/scripts/init-camera-node.sh
 
-# Use unique names:
-# - pi-backyard / backyard
-# - pi-garage / garage
-# - pi-front-door / front-door
+# 3. Reboot and verify stream
+sudo reboot
 ```
 
-### Notes
-
-- **No FFmpeg needed** on Pi Zero → minimal CPU usage
-- **720p @ 25fps** is reliably handled by Pi Zero W
-- **TCP recommended** for Wi-Fi; UDP only for stable LAN
-- Multiple cameras require unique paths in MediaMTX config
-- Pi 5 can handle 4-6 simultaneous 720p streams
+### Access Streams
+```bash
+# RTSP: rtsp://viewer:password@<pi5-ip>:8554/<stream-name>
+# WebRTC: http://<pi5-ip>:8889/<stream-name>
+# HLS:    http://<pi5-ip>:8888/<stream-name>
+```
 
 ---
 

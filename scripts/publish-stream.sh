@@ -10,9 +10,14 @@
 CURRENT_USER=$(whoami)
 
 # Video settings
-WIDTH=1280
-HEIGHT=720
+WIDTH=1296
+HEIGHT=972
 FRAMERATE=15
+
+# These should be set in env
+STREAM_NAME=
+SERVER_IP=
+PORT=
 
 # Log startup
 echo "Starting camera stream..."
@@ -33,11 +38,5 @@ if [ -z "$STREAM_NAME" ]; then
 fi
 
 # Stream to MediaMTX using H.264 hardware encoding (no authentication)
-libcamera-vid -t 0 \
-    --codec h264 \
-    --inline \
-    --width $WIDTH \
-    --height $HEIGHT \
-    --framerate $FRAMERATE \
-    -o - \
-| ffmpeg -re -i - -c copy -f rtsp "rtsp://$SERVER_IP:8554/$STREAM_NAME"
+rpicam-vid -t 0 --codec h264 --inline --width $WIDTH --height $HEIGHT --framerate $FRAMERATE -o - \
+| ffmpeg -fflags nobuffer -i - -c copy -f rtsp -rtsp_transport tcp "rtsp://$SERVER_IP:$PORT/$STREAM_NAME"                         

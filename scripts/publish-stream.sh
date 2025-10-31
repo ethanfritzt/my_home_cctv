@@ -37,6 +37,5 @@ if [ -z "$STREAM_NAME" ]; then
     exit 1
 fi
 
-# Stream to MediaMTX using H.264 hardware encoding (no authentication)
-rpicam-vid -t 0 --codec h264 --inline --width $WIDTH --height $HEIGHT --framerate $FRAMERATE -o - \
-| ffmpeg -fflags nobuffer -i - -c copy -f rtsp -rtsp_transport tcp "rtsp://$SERVER_IP:$PORT/$STREAM_NAME"                         
+# Stream through the UDP protocol so MediaMTX can read it
+rpicam-vid -t 0 --codec libav --libav-format mpegts --inline --width $WIDTH --height $HEIGHT --framerate $FRAMERATE -o udp://$SERVER_IP:$PORT?pkt_size=1316                       

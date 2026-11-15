@@ -1,3 +1,5 @@
+> **Deprecated.** This repo is no longer maintained. Camera node docs, the publish script, and the systemd unit now live in [my_homelab_services/cameras](https://github.com/ethanfritzt/my_homelab_services/tree/master/cameras), and MediaMTX docs in [my_homelab_services/mediamtx](https://github.com/ethanfritzt/my_homelab_services/tree/master/mediamtx).
+
 # Raspberry Pi Home Security Camera System
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
